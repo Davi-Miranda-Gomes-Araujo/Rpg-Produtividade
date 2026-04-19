@@ -14,11 +14,30 @@ import {
 } from 'firebase/auth';
 
 // --- CONFIGURAÇÃO FIREBASE ---
-const firebaseConfig = JSON.parse(__firebase_config);
-const app = initializeApp(firebaseConfig);
+// Nota: Em um ambiente real, você usaria seu próprio config aqui.
+// Para o deploy funcionar, deixaremos as verificações de segurança.
+const firebaseConfig = {
+  apiKey: "AIzaSy...", // Isso será preenchido pelo sistema ou substituído por você
+  authDomain: "rpg-prod-app.firebaseapp.com",
+  projectId: "rpg-prod-app",
+  storageBucket: "rpg-prod-app.appspot.com",
+  messagingSenderId: "123",
+  appId: "1:123:web:abc"
+};
+
+// Fallback para evitar erro de variável global não definida na Vercel
+const getSafeConfig = () => {
+  try {
+    return JSON.parse(window.__firebase_config || JSON.stringify(firebaseConfig));
+  } catch (e) {
+    return firebaseConfig;
+  }
+};
+
+const app = initializeApp(getSafeConfig());
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'rpg-prod-app';
+const appId = "rpg-produtividade-davi";
 
 // --- CONFIGURAÇÃO GEMINI API ---
 const apiKey = ""; 
@@ -117,17 +136,13 @@ export default function App() {
         await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000));
       }
     }
-    throw new Error("Erro.");
+    return "Mantenha o foco, campeão!";
   };
 
   useEffect(() => {
     const initAuth = async () => {
       try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
+        await signInAnonymously(auth);
       } catch (err) { console.error(err); }
     };
     initAuth();
@@ -149,24 +164,21 @@ export default function App() {
       setLoading(false);
     }, () => setLoading(false));
     return () => unsubscribe();
-  }, [user]);
+  }, [user, todayStr]);
 
   const totalXp = useMemo(() => {
     return Object.values(history).reduce((acc, curr) => acc + (curr.dailyXp || 0), 0);
   }, [history]);
 
-  // --- LÓGICA DE NÍVEL DINÂMICA ---
   const getLevelInfo = (xp) => {
     let currentLvl = 1;
     let remainingXp = xp;
     let nextLevelThreshold = 500;
-
     while (remainingXp >= nextLevelThreshold) {
       remainingXp -= nextLevelThreshold;
       currentLvl++;
       nextLevelThreshold += 150; 
     }
-
     return {
       level: currentLvl,
       xpInCurrent: remainingXp,
@@ -187,11 +199,11 @@ export default function App() {
   const generateAdvice = async () => {
     setIsGeneratingAdvice(true);
     try {
-      const prompt = `Status: Nível ${lvlInfo.level}, XP: ${totalXp}. O progresso hoje está em ${todayData.done.length} sub-tarefas. Mande uma mensagem curta.`;
-      const system = "Você é o Rocky Balboa. Fala de um jeito motivador, duro e inspirador. Use gírias como 'Um round a mais', 'O mundo não é um mar de rosas'. Português do Brasil.";
+      const prompt = `Status: Nível ${lvlInfo.level}, XP: ${totalXp}. O progresso hoje está em ${todayData.done.length} sub-tarefas.`;
+      const system = "Você é o Rocky Balboa. Fala de um jeito motivador e duro. Use 'Um round a mais'.";
       const response = await callGemini(prompt, system);
       setAiAdvice(response);
-    } catch (err) { setAiAdvice("Levanta desse sofá e luta! Um round a mais!"); }
+    } catch (err) { setAiAdvice("Levanta e luta! Um round a mais!"); }
     finally { setIsGeneratingAdvice(false); }
   };
 
@@ -219,8 +231,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4 md:p-8 font-sans">
       <div className="max-w-4xl mx-auto space-y-6">
-        
-        {/* HEADER DAVI MIRANDA */}
         <header className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
           <div className="flex flex-col md:flex-row items-center gap-6 relative z-10">
             <div className="w-16 h-16 bg-blue-600 rounded-xl flex items-center justify-center border-2 border-blue-400 shadow-[0_0_15px_rgba(37,99,235,0.4)]">
@@ -244,16 +254,13 @@ export default function App() {
           </div>
         </header>
 
-        {/* AI MENTOR (ROCKY) */}
         <div className="bg-blue-900/10 border border-blue-500/20 rounded-2xl p-5 flex flex-col md:flex-row gap-4 items-center">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
               <MessageSquare className="w-4 h-4 text-blue-400" />
               <span className="text-[10px] font-black uppercase text-blue-400">Dica do Rocky ✨</span>
             </div>
-            <p className="text-sm italic text-zinc-300">
-              {aiAdvice || "Ei, você! Quer saber o que eu acho? Clica no botão ali e ouve o que eu tenho pra dizer."}
-            </p>
+            <p className="text-sm italic text-zinc-300">{aiAdvice || "Um round a mais, Davi!"}</p>
           </div>
           <button 
             onClick={generateAdvice}
@@ -265,7 +272,6 @@ export default function App() {
           </button>
         </div>
 
-        {/* TABS */}
         <div className="flex bg-zinc-900 p-1 rounded-xl border border-zinc-800">
           <button onClick={() => setActiveTab('tasks')} className={`flex-1 py-2 rounded-lg font-bold text-xs uppercase tracking-widest transition-all ${activeTab === 'tasks' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500'}`}>Missões</button>
           <button onClick={() => setActiveTab('rewards')} className={`flex-1 py-2 rounded-lg font-bold text-xs uppercase tracking-widest transition-all ${activeTab === 'rewards' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500'}`}>Recompensas</button>
@@ -275,56 +281,43 @@ export default function App() {
         {activeTab === 'tasks' ? (
           <div className="grid md:grid-cols-3 gap-6">
             <div className="md:col-span-2 space-y-3">
-              {QUEST_TREE.map(main => {
-                const completedSubs = main.subs.filter(s => todayData.done.includes(s.id)).length;
-                const totalSubs = main.subs.length;
-                const isFullComplete = completedSubs === totalSubs;
-
-                return (
-                  <div key={main.id} className={`border rounded-xl transition-all overflow-hidden ${isFullComplete ? 'border-green-500/50 bg-green-500/5' : 'border-zinc-800 bg-zinc-900'}`}>
-                    <div 
-                      onClick={() => setExpanded(prev => ({...prev, [main.id]: !prev[main.id]}))}
-                      className="p-4 flex items-center justify-between cursor-pointer"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${isFullComplete ? 'bg-green-500' : 'bg-zinc-800'}`}>
-                          {isFullComplete ? <CheckCircle2 className="text-white w-6 h-6" /> : main.icon}
-                        </div>
-                        <div>
-                          <h3 className={`font-bold text-sm ${isFullComplete ? 'text-green-500' : 'text-white'}`}>{main.name}</h3>
-                          <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-tighter">{completedSubs}/{totalSubs} COMPLETO</p>
-                        </div>
+              {QUEST_TREE.map(main => (
+                <div key={main.id} className="border border-zinc-800 bg-zinc-900 rounded-xl overflow-hidden">
+                  <div 
+                    onClick={() => setExpanded(prev => ({...prev, [main.id]: !prev[main.id]}))}
+                    className="p-4 flex items-center justify-between cursor-pointer"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-zinc-800">{main.icon}</div>
+                      <div>
+                        <h3 className="font-bold text-sm">{main.name}</h3>
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase">MISSAO</p>
                       </div>
-                      {expanded[main.id] ? <ChevronUp className="w-4 h-4 text-zinc-600" /> : <ChevronDown className="w-4 h-4 text-zinc-600" />}
                     </div>
-
-                    {expanded[main.id] && (
-                      <div className="px-4 pb-4 space-y-2 animate-in slide-in-from-top-1 duration-200">
-                        {main.subs.map(sub => {
-                          const done = todayData.done.includes(sub.id);
-                          return (
-                            <div 
-                              key={sub.id}
-                              onClick={() => handleToggleSub(sub.id)}
-                              className={`p-3 rounded-lg border flex items-center justify-between cursor-pointer transition-all ${done ? 'bg-zinc-800/50 border-zinc-700/50 opacity-60' : 'bg-zinc-800 border-zinc-700 hover:border-zinc-600'}`}
-                            >
-                              <div className="flex items-center gap-3">
-                                {done ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <Circle className="w-4 h-4 text-zinc-600" />}
-                                <span className={`text-xs font-medium ${done ? 'line-through text-zinc-500' : 'text-zinc-300'}`}>{sub.name}</span>
-                              </div>
-                              <span className="text-[9px] font-black text-blue-400">+{sub.xp} XP</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                    {expanded[main.id] ? <ChevronUp className="w-4 h-4 text-zinc-600" /> : <ChevronDown className="w-4 h-4 text-zinc-600" />}
                   </div>
-                );
-              })}
+                  {expanded[main.id] && (
+                    <div className="px-4 pb-4 space-y-2">
+                      {main.subs.map(sub => (
+                        <div 
+                          key={sub.id}
+                          onClick={() => handleToggleSub(sub.id)}
+                          className={`p-3 rounded-lg border flex items-center justify-between cursor-pointer transition-all ${todayData.done.includes(sub.id) ? 'bg-zinc-800/50 border-zinc-700/50' : 'bg-zinc-800 border-zinc-700 hover:border-zinc-600'}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            {todayData.done.includes(sub.id) ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <Circle className="w-4 h-4 text-zinc-600" />}
+                            <span className={`text-xs font-medium ${todayData.done.includes(sub.id) ? 'line-through text-zinc-500' : 'text-zinc-300'}`}>{sub.name}</span>
+                          </div>
+                          <span className="text-[9px] font-black text-blue-400">+{sub.xp} XP</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
-            
             <div className="space-y-4">
-              <h2 className="text-xs font-black uppercase tracking-widest text-zinc-500 flex items-center gap-2"><Save className="w-3 h-3" /> Diário de Bordo</h2>
+              <h2 className="text-xs font-black uppercase text-zinc-500 flex items-center gap-2"><Save className="w-3 h-3" /> Notas</h2>
               <textarea 
                 value={todayData.obs}
                 onChange={(e) => {
@@ -333,49 +326,34 @@ export default function App() {
                   setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'history', todayStr), {...todayData, obs: val});
                 }}
                 className="w-full h-64 bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-xs text-zinc-400 focus:outline-none focus:border-blue-500 transition-colors resize-none"
-                placeholder="Anote suas conquistas aqui..."
+                placeholder="Hoje eu..."
               />
             </div>
           </div>
         ) : activeTab === 'rewards' ? (
-          /* ABA DE RECOMPENSAS */
-          <div className="grid gap-4 md:grid-cols-2 animate-in fade-in duration-500">
-            {REWARDS.map(reward => {
-              const unlocked = lvlInfo.level >= reward.level;
-              return (
-                <div 
-                  key={reward.id} 
-                  className={`p-5 rounded-2xl border-2 transition-all flex items-center gap-5 ${unlocked ? 'border-yellow-500/40 bg-zinc-900 shadow-[0_0_15px_rgba(234,179,8,0.1)]' : 'border-zinc-800 bg-zinc-900 opacity-50'}`}
-                >
-                  <div className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl bg-zinc-800 border-2 ${unlocked ? 'border-yellow-500' : 'border-zinc-700'}`}>
-                    {reward.icon}
-                  </div>
-                  <div className="flex-1">
-                    <h3 className={`font-black uppercase text-sm ${unlocked ? 'text-white' : 'text-zinc-600'}`}>{reward.name}</h3>
-                    <p className="text-[10px] font-bold text-zinc-500 mt-1">
-                      {unlocked ? 'RECOMPENSA DISPONÍVEL! 🔓' : `DESBLOQUEIA NO NÍVEL ${reward.level} 🔒`}
-                    </p>
-                  </div>
-                  {unlocked && <Gift className="w-5 h-5 text-yellow-500 animate-bounce" />}
+          <div className="grid gap-4 md:grid-cols-2">
+            {REWARDS.map(reward => (
+              <div key={reward.id} className={`p-5 rounded-2xl border-2 flex items-center gap-5 ${lvlInfo.level >= reward.level ? 'border-yellow-500/40 bg-zinc-900' : 'border-zinc-800 bg-zinc-900 opacity-50'}`}>
+                <div className="w-14 h-14 rounded-full flex items-center justify-center text-2xl bg-zinc-800">{reward.icon}</div>
+                <div className="flex-1">
+                  <h3 className="font-black uppercase text-sm">{reward.name}</h3>
+                  <p className="text-[10px] font-bold text-zinc-500">{lvlInfo.level >= reward.level ? 'LIBERADO!' : `NÍVEL ${reward.level}`}</p>
                 </div>
-              );
-            })}
+                {lvlInfo.level >= reward.level && <Gift className="w-5 h-5 text-yellow-500 animate-bounce" />}
+              </div>
+            ))}
           </div>
         ) : (
-          /* ABA DE STATUS */
-          <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800 animate-in fade-in duration-500">
-            <h3 className="text-sm font-black uppercase mb-6 flex items-center gap-2 text-zinc-400"><TrendingUp className="text-blue-500 w-4 h-4" /> Evolução de XP</h3>
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
-                  <XAxis dataKey="date" stroke="#444" fontSize={10} axisLine={false} tickLine={false} />
-                  <YAxis stroke="#444" fontSize={10} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '8px', fontSize: '10px' }} />
-                  <Line type="monotone" dataKey="xp" stroke="#3b82f6" strokeWidth={3} dot={{ fill: '#3b82f6', r: 4 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+          <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800 h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
+                <XAxis dataKey="date" stroke="#444" fontSize={10} axisLine={false} tickLine={false} />
+                <YAxis stroke="#444" fontSize={10} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '8px', fontSize: '10px' }} />
+                <Line type="monotone" dataKey="xp" stroke="#3b82f6" strokeWidth={3} dot={{ fill: '#3b82f6', r: 4 }} />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         )}
       </div>
